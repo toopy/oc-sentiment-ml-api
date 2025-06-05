@@ -1,0 +1,11 @@
+*_cache/
+*.egg-info/
+*.egg
+.envrc
+*.pdf
+*.pyc
+.vscode/
+__pycache__/
+build/
+dist/
+sdist/
