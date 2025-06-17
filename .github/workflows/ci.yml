@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  test-and-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install linting dependencies
+        run: |
+          pip install -e ".[lint]"
+
+      - name: Run linting
+        run: |
+          pre-commit run --all-files
+
+      - name: Install tests dependencies
+        run: |
+          pip install -e ".[test]"
+
+      - name: Run tests
+        run: |
+          pytest tests/
+        env:
+          APPINSIGHTS_CONNECTION_STRING: ${{ secrets.APPINSIGHTS_CONNECTION_STRING }}
+
+  build-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: test-and-lint
+    permissions:
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.SENTIMENTAPIDEMO_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.SENTIMENTAPIDEMO_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.SENTIMENTAPIDEMO_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          registryUrl: docker.io
+          registryUsername: ${{ secrets.SENTIMENTAPIDEMO_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.SENTIMENTAPIDEMO_REGISTRY_PASSWORD }}
+          containerAppName: sentiment-api-demo
+          resourceGroup: sentiment-group
+          imageToBuild: toopy/sentiment-api-demo:${{ github.sha }}
